@@ -1,0 +1,7 @@
+id=noappzygote
+name=NoAppZygote
+version=1.0
+versionCode=1
+author=SrMatdroid
+description=Globally blocks app_zygote spawning to prevent Duck Detector SELinux oracle from working
+zygisk=1
