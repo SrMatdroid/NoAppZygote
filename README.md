@@ -30,6 +30,13 @@ NoAppZygote/
 └── README.md
 ```
 
+## Screenshots
+
+| Before (Duck Detector detects KernelSU) | After (NoAppZygote blocks all detections) |
+|---|---|
+| ![Detection](screenshots/2.jpg) | ![No detection](screenshots/1.jpg) |
+| ![Detection detail](screenshots/22.jpg) | |
+
 ## LSPosed module (recommended)
 
 Hooks `com.android.server.am.ProcessList.startProcessLocked()` in system_server. When it detects `usesAppZygote() == true` on the HostingRecord, it returns `Boolean.TRUE` immediately, preventing the fork from happening at all.
