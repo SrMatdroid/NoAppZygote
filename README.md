@@ -1,79 +1,66 @@
 # NoAppZygote
 
-Bloquea globalmente la creación de procesos `app_zygote` en Android para impedir que **Duck Detector** (y cualquier otra app que use este método) ejecute su oráculo SELinux.
+Globally blocks `app_zygote` process spawning on Android. This breaks the SELinux oracle used by **Duck Detector** (PR #22) to detect root/emulation environments.
 
-## Contexto
+## How it works
 
-Duck Detector es un detector de entornos root/emulación que utiliza un **oráculo SELinux** para verificar el estado del kernel. En su [PR #22](https://github.com/Wh0ale/DuckDetector/pull/22), implementa una técnica que consiste en:
+Duck Detector PR #22 uses an app_zygote-based SELinux oracle:
 
-1. Arrancar un proceso `app_zygote` a través de `ProcessList.startProcessLocked()` con `useAppZygote=true`
-2. El `app_zygote` ejecuta `ZygotePreload.doPreload()`, que internamente llama a `selinux_check_access()`
-3. Duck Detector lee el resultado desde `/sys/fs/selinux/access` para determinar si SELinux está en un estado manipulable
+1. Calls `ProcessList.startProcessLocked()` with `useAppZygote=true`
+2. The spawned `app_zygote` runs `ZygotePreload.doPreload()`, which calls `selinux_check_access()`
+3. Duck Detector reads the result from `/sys/fs/selinux/access` to determine if SELinux is in a compromised state
 
-Este proyecto impide que el `app_zygote` llegue a ejecutarse, cortando el oráculo de raíz.
+NoAppZygote prevents the `app_zygote` from ever running, killing the oracle at its root.
 
-## Referencias
-
-- **Duck Detector PR #22** – Implementación del oráculo app_zygote: [github.com/Wh0ale/DuckDetector/pull/22](https://github.com/Wh0ale/DuckDetector/pull/22)
-- **Isolation-Policy** – Módulo LSPosed de referencia que bloquea app_zygote por app: [github.com/avirajb/Isolation-Policy](https://github.com/avirajb/Isolation-Policy)
-- **selinux_check_access()** – Función del kernel que evalúa permisos SELinux: [kernel.org/doc](https://www.kernel.org/doc/html/next/admin-guide/LSM/SELinux.html)
-- **Zygisk API** – Documentación de la API de módulos Zygisk de Magisk: [topjohnwu/zygisk-module-sample](https://github.com/topjohnwu/zygisk-module-sample)
-- **LSPosed Framework** – Framework Xposed para Android 8.1–14: [github.com/LSPosed/LSPosed](https://github.com/LSPosed/LSPosed)
-- **app_zygote en Android** – Child zygote process para aislamiento de apps: [source.android.com/docs/core/runtime/app-zygote](/docs/core/runtime/app-zygote)
-
-## Estructura del proyecto
+## Project structure
 
 ```
 NoAppZygote/
-├── LSPosed/              # Módulo LSPosed (Java, hookea system_server)
-│   ├── app/
-│   │   └── src/main/java/noappzygote/blocker/
-│   │       ├── Entry.java         → Punto de entrada Xposed
-│   │       ├── BindHook.java      → Hook a ProcessList.startProcessLocked
-│   │       └── Logger.java        → Logging helper
+├── LSPosed/               # LSPosed module (Java, hooks system_server)
+│   ├── app/src/main/java/noappzygote/blocker/
+│   │   ├── Entry.java     -> Xposed entrypoint
+│   │   ├── BindHook.java  -> Hooks ProcessList.startProcessLocked
+│   │   └── Logger.java    -> Logging helper
 │   └── prebuilt/NoAppZygote-LSPosed.apk
-├── MagiskZygisk/         # Módulo Magisk Zygisk (C++, mata app_zygote post-fork)
+├── MagiskZygisk/          # Magisk Zygisk module (C++, kills app_zygote post-fork)
 │   ├── source/
-│   │   ├── noappzygote.cpp  → Zygisk ModuleBase implementation
-│   │   └── zygisk.hpp       → Zygisk API header
+│   │   ├── noappzygote.cpp  -> Zygisk ModuleBase implementation
+│   │   └── zygisk.hpp       -> Zygisk API header
 │   └── prebuilt/NoAppZygote-Magisk.zip
-├── docs/                 # Documentación adicional
 └── README.md
 ```
 
-## Cómo funciona
+## LSPosed module (recommended)
 
-### LSPosed (recomendado)
+Hooks `com.android.server.am.ProcessList.startProcessLocked()` in system_server. When it detects `usesAppZygote() == true` on the HostingRecord, it returns `Boolean.TRUE` immediately, preventing the fork from happening at all.
 
-El módulo LSPosed hookea `com.android.server.am.ProcessList.startProcessLocked()` en **system_server**. Cuando detecta que el `HostingRecord` tiene `usesAppZygote() == true`, interrumpe el intento devolviendo `Boolean.TRUE` (simula éxito sin llegar a ejecutar el fork). De esta forma el `app_zygote` nunca llega a crearse.
+**Install:**
+1. Install `NoAppZygote-LSPosed.apk` as a regular app
+2. Enable it in LSPosed Manager with scope = **System Framework** (`android`)
+3. Reboot
 
-**Instalación:**
-1. Instala `NoAppZygote-LSPosed.apk` como una app normal
-2. Actívalo en LSPosed Manager con scope = **System Framework** (`android`)
-3. Reinicia
-
-**Build:**
+**Build from source:**
 ```bash
 cd LSPosed
 ./gradlew assembleDebug
-# → app/build/outputs/apk/debug/app-debug.apk
+# -> app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Magisk Zygisk (alternativo)
+## Magisk Zygisk module (experimental)
 
-El módulo Magisk+Zygisk se inyecta en cada proceso hijo que zygote crea. Detecta en `preAppSpecialize()` si `is_child_zygote == true` y marca el proceso. En `postAppSpecialize()` ejecuta `_exit(0)` para matar el `app_zygote` inmediatamente después del fork, antes de que llegue a ejecutar `ZygotePreload.doPreload()`.
+Gets injected into every forked child process. If `is_child_zygote == true`, it calls `_exit(0)` in `postAppSpecialize()`, killing the app_zygote before `ZygotePreload.doPreload()` runs.
 
-> ⚠️ Este approach es menos limpio porque el fork ya ocurrió. Duck Detector podría detectar que el app_zygote muere instantáneamente. El módulo LSPosed es la solución recomendada.
+Note: this approach is less clean since the fork already happened. The LSPosed module is preferred.
 
-**Instalación:**
-1. Flashea `NoAppZygote-Magisk.zip` desde Magisk / KernelSU / APatch
-2. Asegúrate de que **Zygisk** esté activado en los ajustes de Magisk
-3. Reinicia
+**Install:**
+1. Flash `NoAppZygote-Magisk.zip` in Magisk / KernelSU / APatch
+2. Make sure **Zygisk** is enabled in Magisk settings
+3. Reboot
 
-**Build:**
+**Build from source:**
 ```bash
 cd MagiskZygisk
-# Requiere Android NDK
+# Requires Android NDK
 aarch64-linux-android21-clang++ \
     -fPIC -shared \
     -I source \
@@ -83,13 +70,21 @@ aarch64-linux-android21-clang++ \
 zip -r NoAppZygote-Magisk.zip module.prop zygisk/
 ```
 
-## Notas
+## References
 
-- Probado en Android **13/14** (One UI 6.x). La compatibilidad con otras versiones puede variar.
-- El módulo LSPosed es la opción **recomendada** porque previene el fork completamente.
-- El módulo Magisk está incluido como experimento — puede no funcionar en todas las configuraciones.
-- El build del módulo LSPosed requiere el [SDK de Android](https://developer.android.com/studio) y el API de Xposed (gestionado automáticamente por Gradle).
+- [Duck Detector PR #22](https://github.com/Wh0ale/DuckDetector/pull/22) – app_zygote SELinux oracle implementation
+- [Isolation-Policy](https://github.com/avirajb/Isolation-Policy) – Reference LSPosed module that blocks app_zygote per-app
+- [Zygisk Module Sample](https://github.com/topjohnwu/zygisk-module-sample) – Zygisk API documentation
+- [LSPosed Framework](https://github.com/LSPosed/LSPosed) – Xposed framework for Android 8.1–14
+- [Android app_zygote docs](https://source.android.com/docs/core/runtime/app-zygote) – Child zygote process for app isolation
 
-## Licencia
+## Notes
+
+- Tested on **Android 13/14** (One UI 6.x). Other versions may work but YMMV.
+- The LSPosed module is the **recommended** approach since it prevents the fork entirely.
+- The Magisk module is included as a proof of concept.
+- Building the LSPosed module requires the [Android SDK](https://developer.android.com/studio) (Xposed API is pulled automatically by Gradle).
+
+## License
 
 MIT
