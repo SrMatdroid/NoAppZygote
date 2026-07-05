@@ -87,4 +87,4 @@ zip -r NoAppZygote-Magisk.zip module.prop zygisk/
 
 ## License
 
-MIT
+GNU General Public License v3.0 - see [LICENSE](LICENSE)
