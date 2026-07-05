@@ -72,7 +72,7 @@ zip -r NoAppZygote-Magisk.zip module.prop zygisk/
 
 ## References
 
-- [Duck Detector PR #22](https://github.com/Wh0ale/DuckDetector/pull/22) – app_zygote SELinux oracle implementation
+- [Duck Detector PR #22](https://github.com/eltavine/Duck-Detector-Refactoring/pull/22) – app_zygote SELinux oracle implementation
 - [Isolation-Policy](https://github.com/avirajb/Isolation-Policy) – Reference LSPosed module that blocks app_zygote per-app
 - [Zygisk Module Sample](https://github.com/topjohnwu/zygisk-module-sample) – Zygisk API documentation
 - [LSPosed Framework](https://github.com/LSPosed/LSPosed) – Xposed framework for Android 8.1–14
