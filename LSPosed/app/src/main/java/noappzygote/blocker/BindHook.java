@@ -68,11 +68,13 @@ public class BindHook {
         try {
             Object result = XposedHelpers.callMethod(hostingRecord, "usesAppZygote");
             if (result instanceof Boolean) return ((Boolean) result).booleanValue();
-        } catch (Throwable ignored) {
-        }
-        try {
-            return XposedHelpers.getIntField(hostingRecord, "mHostingZygote") == 2;
-        } catch (Throwable ignored) {
+        } catch (Throwable methodErr) {
+            try {
+                return XposedHelpers.getIntField(hostingRecord, "mHostingZygote") == 2;
+            } catch (Throwable fieldErr) {
+                Logger.e("usesAppZygote: both method and field lookup failed, " +
+                         "module may be non-functional on this ROM", fieldErr);
+            }
         }
         return false;
     }
@@ -81,7 +83,8 @@ public class BindHook {
         try {
             Object result = XposedHelpers.callMethod(hostingRecord, "getRecordName");
             if (result instanceof String) return (String) result;
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            Logger.e("getRecordName failed", t);
         }
         return null;
     }
