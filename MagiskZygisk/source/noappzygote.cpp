@@ -7,6 +7,11 @@
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "NoAppZygote", __VA_ARGS__)
 
+[[noreturn]] static void killAppZygote(const char *reason) {
+    LOGD("%s", reason);
+    _exit(0);
+}
+
 class NoAppZygote : public zygisk::ModuleBase {
 public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
@@ -16,8 +21,7 @@ public:
         char name[16] = {};
         prctl(PR_GET_NAME, name);
         if (strncmp(name, "app_zygote", 10) == 0) {
-            LOGD("onLoad: detected app_zygote via prctl, exiting");
-            _exit(0);
+            killAppZygote("onLoad: detected app_zygote via prctl, exiting");
         }
     }
 
@@ -39,8 +43,7 @@ public:
     void postAppSpecialize(const zygisk::AppSpecializeArgs *args) override {
         (void)args;
         if (should_kill) {
-            LOGD("postAppSpecialize: killing app_zygote");
-            _exit(0);
+            killAppZygote("postAppSpecialize: killing app_zygote");
         }
     }
 

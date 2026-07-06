@@ -65,11 +65,8 @@ public class BindHook {
     }
 
     private static boolean usesAppZygote(Object hostingRecord) {
-        try {
-            Object result = XposedHelpers.callMethod(hostingRecord, "usesAppZygote");
-            if (result instanceof Boolean) return ((Boolean) result).booleanValue();
-        } catch (Throwable ignored) {
-        }
+        Boolean uses = Reflect.callTyped(hostingRecord, "usesAppZygote", Boolean.class);
+        if (uses != null) return uses;
         try {
             return XposedHelpers.getIntField(hostingRecord, "mHostingZygote") == 2;
         } catch (Throwable ignored) {
@@ -78,11 +75,6 @@ public class BindHook {
     }
 
     private static String getRecordName(Object hostingRecord) {
-        try {
-            Object result = XposedHelpers.callMethod(hostingRecord, "getRecordName");
-            if (result instanceof String) return (String) result;
-        } catch (Throwable ignored) {
-        }
-        return null;
+        return Reflect.callTyped(hostingRecord, "getRecordName", String.class);
     }
 }

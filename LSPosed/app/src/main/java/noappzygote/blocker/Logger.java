@@ -9,11 +9,15 @@ public class Logger {
 
     public static void i(String msg) {
         Log.i(TAG, msg);
-        try { XposedBridge.log("[" + TAG + "] " + msg); } catch (Throwable ignored) {}
+        bridge("[" + TAG + "] " + msg);
     }
 
     public static void e(String msg, Throwable t) {
         Log.e(TAG, msg, t);
-        try { XposedBridge.log("[" + TAG + "][E] " + msg + " : " + t); } catch (Throwable ignored) {}
+        bridge("[" + TAG + "][E] " + msg + " : " + t);
+    }
+
+    private static void bridge(String line) {
+        try { XposedBridge.log(line); } catch (Throwable ignored) {}
     }
 }
