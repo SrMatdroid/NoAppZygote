@@ -48,7 +48,7 @@ public class BindHook {
 
                     if (!usesAppZygote(hr)) return;
 
-                    String pkg = getRecordName(hr);
+                    String pkg = getDefiningPackageName(hr);
                     if (pkg != null && ALLOWED.contains(pkg)) {
                         Logger.i("allowed app_zygote for " + pkg);
                         return;
@@ -77,11 +77,21 @@ public class BindHook {
         return false;
     }
 
-    private static String getRecordName(Object hostingRecord) {
+    private static String getDefiningPackageName(Object hostingRecord) {
+        // getName() is a service component, not a package. getRecordName() does
+        // not exist in AOSP. Use the owner of the service, which also handles
+        // BIND_EXTERNAL_SERVICE correctly when the caller is a different app.
         try {
-            Object result = XposedHelpers.callMethod(hostingRecord, "getRecordName");
+            Object result = XposedHelpers.callMethod(hostingRecord, "getDefiningPackageName");
             if (result instanceof String) return (String) result;
         } catch (Throwable ignored) {
+        }
+        // Optimized Samsung frameworks can remove the getter but retain this field.
+        try {
+            Object result = XposedHelpers.getObjectField(hostingRecord, "mDefiningPackageName");
+            if (result instanceof String) return (String) result;
+        } catch (Throwable t) {
+            Logger.e("Cannot resolve app_zygote defining package; browser allowlist unavailable", t);
         }
         return null;
     }
